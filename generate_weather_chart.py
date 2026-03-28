@@ -51,6 +51,14 @@ def make_city_data(df):
                 {'x': r['x'], 'y': None if pd.isna(r[key]) else round(float(r[key]), 1)}
                 for _, r in sub.iterrows()
             ]
+    # Add rainfall data grouped by year (only values >= 2mm)
+    out['prcp'] = {}
+    for year in sorted(df['year'].unique()):
+        sub = df[df['year'] == year].sort_values('plot_date')
+        out['prcp'][str(year)] = [
+            {'x': r['x'], 'y': round(float(r['prcp']), 1) if pd.notna(r['prcp']) and float(r['prcp']) >= 2 else None}
+            for _, r in sub.iterrows()
+        ]
     return out
 
 
@@ -125,14 +133,19 @@ const CITIES=Object.keys(DATA.cities);
 let activeCity=CITIES[0];
 const hidden={{}};
 function hexToRgba(hex,a){{const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return `rgba(${{r}},${{g}},${{b}},${{a}})`;}}
-function makeDatasets(city,key){{return YEARS.map(yr=>({{label:yr,data:(DATA.cities[city][key][yr]||[]),borderColor:hexToRgba(COLORS[yr],OPACITIES[yr]),backgroundColor:'transparent',borderWidth:WIDTHS[yr],pointRadius:0,tension:0.25,parsing:{{xAxisKey:'x',yAxisKey:'y'}},hidden:!!hidden[yr],order:yr===CURRENT?0:1}}));}}
-const scales={{x:{{type:'time',time:{{unit:'month',displayFormats:{{month:'MMM'}}}},min:'2000-01-01',max:'2000-12-31',ticks:{{color:'#b0b0b0',font:{{size:10}}}},grid:{{color:'#334466',lineWidth:0.5}}}},y:{{ticks:{{color:'#b0b0b0',font:{{size:10}},callback:v=>v+' °C'}},grid:{{color:'#334466',lineWidth:0.5}},border:{{color:'#334'}}}}}};
-const charts=KEYS.map((key,idx)=>{{const ctx=document.getElementById('c'+idx).getContext('2d');return new Chart(ctx,{{type:'line',data:{{datasets:makeDatasets(activeCity,key)}},options:{{animation:false,responsive:true,maintainAspectRatio:false,interaction:{{mode:'index',intersect:false}},plugins:{{legend:{{display:false}},tooltip:{{backgroundColor:'#0f3460',borderColor:'#334466',borderWidth:1,titleColor:'#e0e0e0',bodyColor:'#b0b0b0',callbacks:{{title:items=>{{const d=new Date(items[0].parsed.x);return d.toLocaleDateString('en',{{month:'short',day:'numeric'}})}},label:ctx=>`${{ctx.dataset.label}}: ${{ctx.parsed.y!=null?ctx.parsed.y.toFixed(1)+' °C':'–'}}`}}}}}},scales}}}})}});
-function switchCity(city){{activeCity=city;document.getElementById('page-title').textContent=`Weather Temperature Comparison — ${{city}}`;document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.city===city));charts.forEach((ch,idx)=>{{ch.data.datasets=makeDatasets(city,KEYS[idx]);ch.data.datasets.forEach(ds=>{{ds.hidden=!!hidden[ds.label]}});ch.update()}});}}
+function makeDatasets(city,key){{
+  if(key==='prcp'){{
+    return YEARS.map(yr=>({{label:yr+'_prcp',data:(DATA.cities[city][key][yr]||[]),backgroundColor:hexToRgba(COLORS[yr],0.6),borderWidth:0,barThickness:'flex',yAxisID:'y1',parsing:{{xAxisKey:'x',yAxisKey:'y'}},hidden:!!hidden[yr],order:1}}));
+  }}
+  return YEARS.map(yr=>({{label:yr,data:(DATA.cities[city][key][yr]||[]),borderColor:hexToRgba(COLORS[yr],OPACITIES[yr]),backgroundColor:'transparent',borderWidth:WIDTHS[yr],pointRadius:0,tension:0.25,parsing:{{xAxisKey:'x',yAxisKey:'y'}},hidden:!!hidden[yr],order:yr===CURRENT?0:2}}));
+}}const scales={{x:{{type:'time',time:{{unit:'month',displayFormats:{{month:'MMM'}}}},min:'2000-01-01',max:'2000-12-31',ticks:{{color:'#b0b0b0',font:{{size:10}}}},grid:{{color:'#334466',lineWidth:0.5}}}},y:{{position:'left',ticks:{{color:'#b0b0b0',font:{{size:10}},callback:v=>v+' °C'}},grid:{{color:'#334466',lineWidth:0.5}},border:{{color:'#334'}}}},y1:{{position:'right',ticks:{{color:'#6ba3d4',font:{{size:10}},callback:v=>v+' mm'}},grid:{{drawOnChartArea:false}},border:{{color:'#334'}},title:{{display:true,text:'Rainfall',color:'#6ba3d4'}}}}}};;
+const charts=KEYS.map((key,idx)=>{{const ctx=document.getElementById('c'+idx).getContext('2d');const datasets=[...makeDatasets(activeCity,key)];if(key==='tavg')datasets.unshift(...makeDatasets(activeCity,'prcp'));return new Chart(ctx,{{type:'line',data:{{datasets:datasets}},options:{{animation:false,responsive:true,maintainAspectRatio:false,interaction:{{mode:'index',intersect:false}},plugins:{{legend:{{display:false}},tooltip:{{backgroundColor:'#0f3460',borderColor:'#334466',borderWidth:1,titleColor:'#e0e0e0',bodyColor:'#b0b0b0',callbacks:{{title:items=>{{const d=new Date(items[0].parsed.x);return d.toLocaleDateString('en',{{month:'short',day:'numeric'}})}},label:ctx=>`${{ctx.dataset.label}}: ${{ctx.parsed.y!=null?ctx.parsed.y.toFixed(1)+(ctx.dataset.yAxisID==='y1'?' mm':' °C'):'–'}}`}}}}}},scales}}}})}});
+function switchCity(city){{activeCity=city;document.getElementById('page-title').textContent=`Weather Temperature Comparison — ${{city}}`;document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.city===city));charts.forEach((ch,idx)=>{{const key=KEYS[idx];let datasets=makeDatasets(city,key);if(key==='tavg')datasets=[...makeDatasets(city,'prcp'),...datasets];ch.data.datasets=datasets;ch.data.datasets.forEach(ds=>{{ds.hidden=!!hidden[ds.label]}});ch.update()}});}}
 const tabsEl=document.getElementById('tabs');
 CITIES.forEach(city=>{{const t=document.createElement('div');t.className='tab'+(city===activeCity?' active':'');t.dataset.city=city;t.textContent=city;t.addEventListener('click',()=>switchCity(city));tabsEl.appendChild(t);}});
 const legEl=document.getElementById('legend');
-YEARS.forEach(yr=>{{const item=document.createElement('div');item.className='leg-item'+(yr===CURRENT?' current-year':'');item.dataset.year=yr;item.innerHTML=`<div class="leg-swatch" style="background:${{COLORS[yr]}}"></div><span class="leg-label">${{yr}}${{yr===CURRENT?' ★':''}}</span>`;item.addEventListener('click',()=>{{hidden[yr]=!hidden[yr];item.classList.toggle('hidden',hidden[yr]);charts.forEach(ch=>{{const ds=ch.data.datasets.find(d=>d.label===yr);if(ds){{ds.hidden=hidden[yr];ch.update()}}}});}});legEl.appendChild(item);}});
+YEARS.forEach(yr=>{{const item=document.createElement('div');item.className='leg-item'+(yr===CURRENT?' current-year':'');item.dataset.year=yr;item.innerHTML=`<div class="leg-swatch" style="background:${{COLORS[yr]}}"></div><span class="leg-label">${{yr}}${{yr===CURRENT?' ★':''}}</span>`;item.addEventListener('click',()=>{{hidden[yr]=!hidden[yr];item.classList.toggle('hidden',hidden[yr]);charts.forEach(ch=>{{ch.data.datasets.forEach(ds=>{{if(ds.label===yr||ds.label===yr+'_prcp'){{ds.hidden=hidden[yr];}}}});ch.update()}});}}); legEl.appendChild(item);}});
+
 switchCity(activeCity);
 </script>
 </body>
