@@ -18,6 +18,12 @@ A Python tool that generates interactive HTML visualizations comparing weather t
 - Python 3.7+
 - pandas
 
+### Data Source
+
+Download weather data from [Meteostat](https://meteostat.net/):
+- Visit: https://meteostat.net/en/place/nl/lisse?s=06240&t=2023-01-01/2026-04-04
+- Or search for your desired location at: https://meteostat.net/
+
 ### Installation
 
 1. Clone this repository:
